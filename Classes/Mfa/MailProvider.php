@@ -85,7 +85,8 @@ class MailProvider implements MfaProviderInterface
         $view->assign('providerIdentifier', $propertyManager->getIdentifier());
 
         $output = match ($type) {
-            MfaViewType::SETUP, MfaViewType::EDIT => $this->prepareEditView($view, $propertyManager),
+            MfaViewType::SETUP,
+            MfaViewType::EDIT => $this->prepareEditView($view, $propertyManager),
             MfaViewType::AUTH => $this->prepareAuthView($request, $view, $propertyManager),
         };
         $response = $this->responseFactory->createResponse();
