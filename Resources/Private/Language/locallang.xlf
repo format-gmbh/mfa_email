@@ -72,6 +72,9 @@ Musterstrasse 123
             <trans-unit id="auth.resend.button" resname="auth.resend.button">
                 <source>Re-send the code</source>
             </trans-unit>
+            <trans-unit id="auth.locked" resname="auth.locked">
+                <source>The email MFA provider has been locked due to too many failed authentication attempts.</source>
+            </trans-unit>
             <trans-unit id="mail.titlesuffix" resname="mail.titlesuffix">
                 <source>Your authentication code is %s</source>
             </trans-unit>

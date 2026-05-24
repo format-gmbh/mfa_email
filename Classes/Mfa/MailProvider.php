@@ -18,7 +18,6 @@ use TYPO3\CMS\Core\Mail\Mailer;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Type\ContextualFeedbackSeverity;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Core\View\ViewFactoryData;
 use TYPO3\CMS\Core\View\ViewFactoryInterface;
@@ -35,9 +34,10 @@ class MailProvider implements MfaProviderInterface
         protected Context              $context,
         protected ResponseFactory      $responseFactory,
         protected ViewFactoryInterface $viewFactory,
+        protected Mailer               $mailer,
+        protected FlashMessageService  $flashMessageService,
         ExtensionConfiguration         $extensionConfiguration
-    )
-    {
+    ) {
         $this->extensionConfiguration = $extensionConfiguration->get('mfa_email');
     }
 
@@ -84,17 +84,12 @@ class MailProvider implements MfaProviderInterface
         $view = $this->viewFactory->create($viewFactoryData);
         $view->assign('providerIdentifier', $propertyManager->getIdentifier());
 
-        switch ($type) {
-            case MfaViewType::SETUP:
-            case MfaViewType::EDIT:
-                $output = $this->prepareEditView($view, $propertyManager);
-                break;
-            case MfaViewType::AUTH:
-                $output = $this->prepareAuthView($request, $view, $propertyManager);
-                break;
-        }
+        $output = match ($type) {
+            MfaViewType::SETUP, MfaViewType::EDIT => $this->prepareEditView($view, $propertyManager),
+            MfaViewType::AUTH => $this->prepareAuthView($request, $view, $propertyManager),
+        };
         $response = $this->responseFactory->createResponse();
-        $response->getBody()->write($output ?? '');
+        $response->getBody()->write($output);
 
         return $response;
     }
@@ -176,7 +171,7 @@ class MailProvider implements MfaProviderInterface
             return false;
         }
 
-        $email = trim($request->getParsedBody()['email']);
+        $email = trim((string)($request->getParsedBody()['email'] ?? ''));
         if (!$this->checkValidEmail($email)) {
             return false;
         }
@@ -207,25 +202,25 @@ class MailProvider implements MfaProviderInterface
             $mailLayoutName = (isset($this->extensionConfiguration['mailLayoutName']) && trim($this->extensionConfiguration['mailLayoutName']) !== '') ? $this->extensionConfiguration['mailLayoutName'] : 'MfaEmail';
             $mailTemplateName = (isset($this->extensionConfiguration['mailTemplateName']) && trim($this->extensionConfiguration['mailTemplateName']) !== '') ? $this->extensionConfiguration['mailTemplateName'] : 'MfaEmail';
 
-            $email = GeneralUtility::makeInstance(FluidEmail::class);
-            $email->setRequest($this->request);
-            $email
+            $fluidEmail = new FluidEmail();
+            $fluidEmail->setRequest($this->request);
+            $fluidEmail
                 ->to($propertyManager->getProperty('email'))
                 ->setTemplate($mailTemplateName)
                 ->assignMultiple([
                     'authCode' => $authCode,
                     'email' => $propertyManager->getProperty('email'),
-                    'layoutName' => $mailLayoutName
+                    'layoutName' => $mailLayoutName,
                 ]);
 
-            $email->getHtmlBody(true); // Generate Subject
-            $email->subject($email->getSubject());
+            $fluidEmail->getHtmlBody(true);
+            $fluidEmail->subject($fluidEmail->getSubject());
 
             if (!empty($this->extensionConfiguration['mailSenderEmail'])) {
-                $email->from(new Address($this->extensionConfiguration['mailSenderEmail'], $this->extensionConfiguration['mailSenderName']));
+                $fluidEmail->from(new Address($this->extensionConfiguration['mailSenderEmail'], $this->extensionConfiguration['mailSenderName']));
             }
 
-            GeneralUtility::makeInstance(Mailer::class)->send($email);
+            $this->mailer->send($fluidEmail);
 
     }
 
@@ -300,27 +295,20 @@ class MailProvider implements MfaProviderInterface
         return true;
     }
 
-    public function isEmailValid($email)
+    public function isEmailValid(string $email): bool
     {
-        return filter_var($email, FILTER_VALIDATE_EMAIL);
+        return (bool)filter_var($email, FILTER_VALIDATE_EMAIL);
     }
 
-
-    /**
-     * Helper to display localized flash messages
-     */
     protected function showLocalizedFlashMessage(string $messageKey): void
     {
-        $errorMessage = GeneralUtility::makeInstance(
-            FlashMessage::class,
+        $flashMessage = new FlashMessage(
             $this->showLocalizedMessage($messageKey . '.message'),
             $this->showLocalizedMessage($messageKey . '.title'),
             ContextualFeedbackSeverity::ERROR,
             true
         );
-        $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($errorMessage);
+        $this->flashMessageService->getMessageQueueByIdentifier()->addMessage($flashMessage);
     }
 
     /**

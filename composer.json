@@ -17,12 +17,12 @@
         "issues": "https://github.com/MrSilaz/mfa_email/issues",
         "source": "https://github.com/MrSilaz/mfa_email/"
     },
-    "version": "2.0.1",
+    "version": "2.1.0",
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require": {
         "php": ">=8.2",
-        "typo3/cms-core": "^13.4"
+        "typo3/cms-core": "^14"
     },
 
     "autoload": {
